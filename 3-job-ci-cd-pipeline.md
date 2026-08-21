@@ -28,6 +28,11 @@
     - [Deployment Flow](#deployment-flow)
   - [9. Pipeline Flow](#9-pipeline-flow)
     - [End-to-End Workflow](#end-to-end-workflow)
+  - [10. Testing and Results](#10-testing-and-results)
+    - [Testing Process](#testing-process)
+  - [12. Benefits of the CI/CD Pipeline](#12-benefits-of-the-cicd-pipeline)
+    - [Benefits Observed](#benefits-observed)
+    - [Benefits for an Organisation](#benefits-for-an-organisation)
 
 ## 1. Overview
 
@@ -346,3 +351,63 @@ The complete CI/CD pipeline follows a controlled sequence from code development 
 │ application  │
 └──────────────┘
 ```
+## 10. Testing and Results
+
+The pipeline was tested multiple times to confirm that changes made to the development branch could successfully progress through the CI/CD process and appear on the deployed application.
+
+### Testing Process
+
+The application front page was modified on the development branch and the changes were pushed to GitHub.
+
+The GitHub webhook triggered Jenkins automatically, starting the CI/CD process.
+
+The change then progressed through the three Jenkins jobs:
+
+```text
+Developer change
+      ↓
+GitHub dev branch
+      ↓
+Webhook
+      ↓
+Job 1 — Test
+      ↓
+Job 2 — Merge
+      ↓
+dev → main
+      ↓
+Job 3 — Deploy
+      ↓
+AWS EC2
+      ↓
+Updated front page
+
+## 12. Benefits of the CI/CD Pipeline
+
+### Benefits Observed
+
+The CI/CD pipeline provided several benefits during the project:
+
+- **Automation:** Testing, merging and deployment were performed automatically.
+
+- **Faster feedback:** Developers could identify failed tests quickly.
+
+- **Consistency:** The same deployment process was followed each time.
+
+- **Reduced manual work:** Developers did not need to manually transfer and deploy every change.
+
+- **Improved reliability:** Multiple pipeline runs could be used to verify that changes were deployed consistently.
+
+- **Controlled deployments:** Code had to pass the testing stage before reaching the deployment stage.
+
+### Benefits for an Organisation
+
+A CI/CD pipeline can provide significant benefits to an organisation.
+
+Automating repetitive processes can reduce the amount of manual work required from development and operations teams. This allows teams to spend more time working on application improvements rather than manually testing and deploying changes.
+
+Automated testing also provides an early indication when a change has introduced a problem. This can reduce the risk of faulty code reaching users.
+
+A repeatable deployment process can also improve consistency between deployments and reduce the possibility of human error.
+
+Overall, CI/CD supports faster and more reliable software delivery while creating a controlled process for moving changes from development into a deployed environment.
