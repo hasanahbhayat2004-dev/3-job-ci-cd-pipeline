@@ -7,6 +7,7 @@
   - [1. Overview](#1-overview)
     - [Objectives](#objectives)
   - [2. Pipeline Architecture](#2-pipeline-architecture)
+    - [Why the Pipeline Was Designed This Way](#why-the-pipeline-was-designed-this-way)
   - [3. Prerequisites](#3-prerequisites)
     - [Repository Structure](#repository-structure)
   - [4. Job 1 — Test](#4-job-1--test)
@@ -14,14 +15,18 @@
     - [Process](#process)
     - [Why testing comes first](#why-testing-comes-first)
     - [Expected Outcome](#expected-outcome)
+    - [Job 1 Setup](#job-1-setup)
   - [5. Job 2 — Merge](#5-job-2--merge)
     - [Purpose](#purpose-1)
     - [Process](#process-1)
     - [Git Branching](#git-branching)
+    - [Job 2 Setup](#job-2-setup)
   - [6. Job 3 — Deploy](#6-job-3--deploy)
     - [Purpose](#purpose-2)
     - [Process](#process-2)
+    - [Job 3 Setup and Authentication](#job-3-setup-and-authentication)
   - [7. GitHub Webhook](#7-github-webhook)
+    - [Webhook Setup](#webhook-setup)
     - [Purpose](#purpose-3)
     - [Process](#process-3)
   - [8. AWS EC2 Deployment](#8-aws-ec2-deployment)
@@ -29,8 +34,10 @@
   - [9. Pipeline Flow](#9-pipeline-flow)
     - [End-to-End Workflow](#end-to-end-workflow)
   - [10. Testing and Results](#10-testing-and-results)
+    - [First Successful Deployment](#first-successful-deployment)
+    - [Second Successful Deployment](#second-successful-deployment)
     - [Testing Process](#testing-process)
-  - [12. Benefits of the CI/CD Pipeline](#12-benefits-of-the-cicd-pipeline)
+  - [11. Benefits of the CI/CD Pipeline](#11-benefits-of-the-cicd-pipeline)
     - [Benefits Observed](#benefits-observed)
     - [Benefits for an Organisation](#benefits-for-an-organisation)
 
@@ -92,6 +99,17 @@ AWS EC2 Instance
     ▼
 Running Application
 ```
+### Why the Pipeline Was Designed This Way
+
+The pipeline was separated into three Jenkins jobs so that testing, merging and deployment each had a clear responsibility.
+
+Job 1 acts as a quality gate by testing changes before they can progress further. Job 2 only merges code from `dev` into `main` after the tests have passed. Job 3 then handles deployment to AWS EC2.
+
+This creates a controlled flow:
+
+`Test → Merge → Deploy`
+
+Separating the stages makes it easier to identify where a failure has occurred and prevents failed or untested code from automatically reaching the deployed environment.
 ## 3. Prerequisites
 
 The following tools and services were required to build and run the CI/CD pipeline.
@@ -144,7 +162,17 @@ This follows the Continuous Integration principle of integrating and testing cha
 A successful Job 1 execution should show a successful Jenkins build and passing tests.
 
 If the tests fail, the build should be marked as failed and the subsequent jobs should not proceed.
+### Job 1 Setup
 
+Job 1 was configured in Jenkins as the Continuous Integration testing stage.
+
+The GitHub repository was configured as the source code repository and Jenkins was configured to work with the `dev` branch.
+
+The job retrieved the application code, installed the required dependencies and executed the automated tests.
+
+Job 1 was also configured to trigger Job 2 only when the build completed successfully. This ensured that failed code could not progress to the merge stage.
+
+Jenkins credentials were used where authentication was required rather than storing sensitive credentials directly within the application source code.
 ## 5. Job 2 — Merge
 
 The second Jenkins job is responsible for merging tested changes from the development branch into the main branch.
@@ -191,6 +219,15 @@ Job 2 — Merge
     ▼
 main branch
 ```
+### Job 2 Setup
+
+Job 2 was configured to run only after Job 1 completed successfully.
+
+The Jenkins **Git Publisher** plugin was configured within the **Post-build Actions** section. This allowed Jenkins to push the successfully tested changes from the `dev` branch into the `main` branch.
+
+Using Git Publisher automated the merge stage and removed the need for the developer to manually merge successfully tested changes.
+
+Authentication to GitHub was managed through Jenkins credentials so that repository credentials did not need to be stored directly within the application code.
 ## 6. Job 3 — Deploy
 
 The third Jenkins job is responsible for deploying the tested and merged application to an AWS EC2 instance.
@@ -236,9 +273,37 @@ Start / restart application
       ▼
 Updated application
 ```
+### Job 3 Setup and Authentication
+
+Job 3 was configured to run after Job 2 completed successfully.
+
+An AWS EC2 instance was used as the deployment environment. Jenkins needed permission to connect to this instance using SSH.
+
+The EC2 private key was added to Jenkins credentials so that Jenkins could authenticate securely with the EC2 instance without storing the private key inside the GitHub repository.
+
+Jenkins transferred the updated and tested application files to EC2 using `scp` or `rsync`.
+
+The application was not deployed by cloning the `main` branch directly onto the EC2 instance. Instead, Jenkins transferred the tested code from its workspace to the deployment server.
+
+After transferring the files, Jenkins connected to the EC2 instance through SSH and executed the commands required to install dependencies and start or restart the application.
 ## 7. GitHub Webhook
 
 A GitHub webhook was used to automatically notify Jenkins when changes were pushed to the GitHub repository.
+### Webhook Setup
+
+The webhook was configured within the GitHub repository settings.
+
+GitHub was configured to send a webhook event to Jenkins when changes were pushed to the repository.
+
+When a developer pushed a change to the `dev` branch:
+
+1. GitHub detected the push.
+2. The webhook notified Jenkins.
+3. Jenkins automatically triggered Job 1.
+4. If Job 1 passed, Job 2 was triggered.
+5. If Job 2 completed successfully, Job 3 deployed the application to EC2.
+
+This meant the developer did not need to manually start the Jenkins pipeline after every change.
 
 ### Purpose
 
@@ -300,6 +365,8 @@ Running Application
 
 The complete CI/CD pipeline follows a controlled sequence from code development through to deployment.
 
+![CICD-Pipeline Diagram](./screenshots/cicd-pipeline.png)
+
 ### End-to-End Workflow
 
 ```text
@@ -354,6 +421,19 @@ The complete CI/CD pipeline follows a controlled sequence from code development 
 ## 10. Testing and Results
 
 The pipeline was tested multiple times to confirm that changes made to the development branch could successfully progress through the CI/CD process and appear on the deployed application.
+### First Successful Deployment
+
+The first change was made to the application on the `dev` branch and pushed to GitHub. The webhook triggered the Jenkins pipeline and the change successfully progressed through testing, merging and deployment.
+
+**Change displayed:** ![First successful CI/CD deployment](./screenshots/dev-change-1.png)
+### Second Successful Deployment
+
+A second change was made shortly afterwards to confirm that the pipeline could reliably process and deploy repeated updates.
+
+![Second successful CI/CD deployment](./screenshots/dev-change-2.png)
+
+
+The successful deployment of both changes demonstrates that the CI/CD pipeline could automatically test, merge and deploy application updates to the EC2 instance.
 
 ### Testing Process
 
@@ -381,8 +461,9 @@ Job 3 — Deploy
 AWS EC2
       ↓
 Updated front page
+```
 
-## 12. Benefits of the CI/CD Pipeline
+## 11. Benefits of the CI/CD Pipeline
 
 ### Benefits Observed
 
