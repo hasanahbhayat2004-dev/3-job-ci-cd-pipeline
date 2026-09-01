@@ -38,6 +38,7 @@
       - [Step 5 — Configure the EC2 Instance](#step-5--configure-the-ec2-instance)
       - [Step 6 — Transfer the Application](#step-6--transfer-the-application)
       - [Step 7 — Execute Shell Commands](#step-7--execute-shell-commands)
+      - [Step 7 — Configure the Execute Shell](#step-7--configure-the-execute-shell)
       - [Step 8 — Save and Test Job 3](#step-8--save-and-test-job-3)
       - [Expected Result](#expected-result)
   - [7. GitHub Webhook](#7-github-webhook)
@@ -49,6 +50,7 @@
       - [Step 4 — Select the Trigger Event](#step-4--select-the-trigger-event)
       - [Step 5 — Enable the Jenkins GitHub Trigger](#step-5--enable-the-jenkins-github-trigger)
       - [Step 6 — Test the Webhook](#step-6--test-the-webhook)
+      - [Step 7 — Configure the Execute Shell](#step-7--configure-the-execute-shell-1)
   - [8. AWS EC2 Deployment](#8-aws-ec2-deployment)
     - [Deployment Flow](#deployment-flow)
   - [9. Pipeline Flow](#9-pipeline-flow)
@@ -395,30 +397,38 @@ This is important because the EC2 instance does not simply clone the `main` bran
 
 #### Step 7 — Execute Shell Commands
 
-The following shell commands were used by Job 3:
+#### Step 7 — Configure the Execute Shell
+
+Under **Build Steps**, select **Execute shell**.
+
+The Execute Shell commands are responsible for transferring the application from the Jenkins workspace to the EC2 instance and then connecting to the instance using SSH to start the application.
+
+The deployment commands follow this structure:
 
 ```bash
-# INSERT THE ACTUAL JOB 3 EXECUTE SHELL COMMANDS USED HERE
-```
+# Copy the application from the Jenkins workspace to EC2
+scp -r . ubuntu@<EC2-PUBLIC-IP>:/home/ubuntu/app
 
-The deployment script performs two main operations:
+# Connect to the EC2 instance
+ssh ubuntu@<EC2-PUBLIC-IP> << 'EOF'
 
-1. Transfers the application files from the Jenkins workspace to the EC2 instance.
-2. Connects to the EC2 instance through SSH and runs the commands required to install dependencies and start/restart the application.
+cd /home/ubuntu/app
 
-A typical structure for this deployment is:
-
-```bash
-scp -r <application-files> ubuntu@<EC2-IP>:<destination>
-
-ssh ubuntu@<EC2-IP> << 'EOF'
-cd <application-directory>
+# Install the application dependencies
 npm install
-# application start/restart command
+
+# Start/restart the application
+pm2 stop all || true
+pm2 start app.js
+
 EOF
 ```
 
-The exact commands used in the Jenkins Execute Shell configuration should be included above so that the deployment can be reproduced.
+The `scp` command transfers the application files directly from the Jenkins workspace to the EC2 instance. This ensures that the deployment is performed by Jenkins rather than cloning the application directly from GitHub on the production server.
+
+The `ssh` command then allows Jenkins to remotely execute commands on the EC2 instance. Jenkins moves into the application directory, installs the required dependencies and starts or restarts the Node.js application.
+
+The EC2 private key required for the SSH connection is stored securely using Jenkins credentials rather than being committed to the GitHub repository.
 
 #### Step 8 — Save and Test Job 3
 
@@ -525,6 +535,38 @@ Jenkins
     ▼
 Job 1 — Test
 ```
+#### Step 7 — Configure the Execute Shell
+
+Under **Build Steps**, select **Execute shell**.
+
+The Execute Shell commands are responsible for transferring the application from the Jenkins workspace to the EC2 instance and then connecting to the instance using SSH to start the application.
+
+The deployment commands follow this structure:
+
+```bash
+# Copy the application from the Jenkins workspace to EC2
+scp -r . ubuntu@<EC2-PUBLIC-IP>:/home/ubuntu/app
+
+# Connect to the EC2 instance
+ssh ubuntu@<EC2-PUBLIC-IP> << 'EOF'
+
+cd /home/ubuntu/app
+
+# Install the application dependencies
+npm install
+
+# Start/restart the application
+pm2 stop all || true
+pm2 start app.js
+
+EOF
+```
+
+The `scp` command transfers the application files directly from the Jenkins workspace to the EC2 instance. This ensures that the deployment is performed by Jenkins rather than cloning the application directly from GitHub on the production server.
+
+The `ssh` command then allows Jenkins to remotely execute commands on the EC2 instance. Jenkins moves into the application directory, installs the required dependencies and starts or restarts the Node.js application.
+
+The EC2 private key required for the SSH connection is stored securely using Jenkins credentials rather than being committed to the GitHub repository.
 ## 8. AWS EC2 Deployment
 
 AWS EC2 was used as the cloud environment for hosting the application.
