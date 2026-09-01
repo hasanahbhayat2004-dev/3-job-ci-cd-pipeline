@@ -16,6 +16,11 @@
     - [Why testing comes first](#why-testing-comes-first)
     - [Expected Outcome](#expected-outcome)
     - [Job 1 Setup](#job-1-setup)
+    - [Job 1 Setup](#job-1-setup-1)
+      - [Step 1 — Create the Jenkins Job](#step-1--create-the-jenkins-job)
+      - [Step 2 — Configure the GitHub Repository](#step-2--configure-the-github-repository)
+      - [Step 3 — Configure the GitHub Trigger](#step-3--configure-the-github-trigger)
+      - [Step 4 — Configure the Test](#step-4--configure-the-test)
   - [5. Job 2 — Merge](#5-job-2--merge)
     - [Purpose](#purpose-1)
     - [Process](#process-1)
@@ -25,10 +30,25 @@
     - [Purpose](#purpose-2)
     - [Process](#process-2)
     - [Job 3 Setup and Authentication](#job-3-setup-and-authentication)
+    - [Job 3 Setup and Authentication](#job-3-setup-and-authentication-1)
+      - [Step 1 — Create Job 3](#step-1--create-job-3)
+      - [Step 2 — Configure the Repository](#step-2--configure-the-repository)
+      - [Step 3 — Configure the Trigger](#step-3--configure-the-trigger)
+      - [Step 4 — Configure SSH Authentication](#step-4--configure-ssh-authentication)
+      - [Step 5 — Configure the EC2 Instance](#step-5--configure-the-ec2-instance)
+      - [Step 6 — Transfer the Application](#step-6--transfer-the-application)
+      - [Step 7 — Execute Shell Commands](#step-7--execute-shell-commands)
+      - [Step 8 — Save and Test Job 3](#step-8--save-and-test-job-3)
+      - [Expected Result](#expected-result)
   - [7. GitHub Webhook](#7-github-webhook)
     - [Webhook Setup](#webhook-setup)
-    - [Purpose](#purpose-3)
-    - [Process](#process-3)
+    - [Webhook Setup](#webhook-setup-1)
+      - [Step 1 — Open the GitHub Repository Settings](#step-1--open-the-github-repository-settings)
+      - [Step 2 — Configure the Payload URL](#step-2--configure-the-payload-url)
+      - [Step 3 — Configure the Content Type](#step-3--configure-the-content-type)
+      - [Step 4 — Select the Trigger Event](#step-4--select-the-trigger-event)
+      - [Step 5 — Enable the Jenkins GitHub Trigger](#step-5--enable-the-jenkins-github-trigger)
+      - [Step 6 — Test the Webhook](#step-6--test-the-webhook)
   - [8. AWS EC2 Deployment](#8-aws-ec2-deployment)
     - [Deployment Flow](#deployment-flow)
   - [9. Pipeline Flow](#9-pipeline-flow)
@@ -164,15 +184,49 @@ A successful Job 1 execution should show a successful Jenkins build and passing 
 If the tests fail, the build should be marked as failed and the subsequent jobs should not proceed.
 ### Job 1 Setup
 
-Job 1 was configured in Jenkins as the Continuous Integration testing stage.
+### Job 1 Setup
 
-The GitHub repository was configured as the source code repository and Jenkins was configured to work with the `dev` branch.
+Job 1 was created as a Jenkins Freestyle project and configured to test changes pushed to the `dev` branch.
 
-The job retrieved the application code, installed the required dependencies and executed the automated tests.
+#### Step 1 — Create the Jenkins Job
 
-Job 1 was also configured to trigger Job 2 only when the build completed successfully. This ensured that failed code could not progress to the merge stage.
+1. From the Jenkins dashboard, select **New Item**.
+2. Enter a name for the job, for example:
+   `hasanah-ttt-job1-ci-test`
+3. Select **Freestyle project**.
+4. Select **OK** to create the job.
 
-Jenkins credentials were used where authentication was required rather than storing sensitive credentials directly within the application source code.
+#### Step 2 — Configure the GitHub Repository
+
+1. Under **Source Code Management**, select **Git**.
+2. Enter the HTTPS or SSH URL of the GitHub repository.
+3. Select the appropriate Jenkins GitHub credentials.
+4. Under **Branches to build**, configure the development branch:
+
+   `*/dev`
+
+This ensures that Job 1 tests changes from the development branch rather than the main branch.
+
+#### Step 3 — Configure the GitHub Trigger
+
+Under **Build Triggers**, enable:
+
+`GitHub hook trigger for GITScm polling`
+
+This allows a GitHub webhook to automatically trigger Job 1 when changes are pushed to the repository.
+
+#### Step 4 — Configure the Test
+
+Under **Build Steps**, select **Execute shell**.
+
+The application dependencies and tests can then be executed from the Jenkins workspace.
+
+For the Node.js application, the build commands used were:
+
+```bash
+npm install
+npm test
+```
 ## 5. Job 2 — Merge
 
 The second Jenkins job is responsible for merging tested changes from the development branch into the main branch.
@@ -275,17 +329,115 @@ Updated application
 ```
 ### Job 3 Setup and Authentication
 
-Job 3 was configured to run after Job 2 completed successfully.
+### Job 3 Setup and Authentication
 
-An AWS EC2 instance was used as the deployment environment. Jenkins needed permission to connect to this instance using SSH.
+Job 3 was created as a Jenkins Freestyle project responsible for transferring the tested application from the Jenkins workspace to AWS EC2 and starting or restarting the application.
 
-The EC2 private key was added to Jenkins credentials so that Jenkins could authenticate securely with the EC2 instance without storing the private key inside the GitHub repository.
+Unlike a deployment that performs a `git clone` directly on the production server, this pipeline transfers the application files that have progressed through the Jenkins pipeline.
 
-Jenkins transferred the updated and tested application files to EC2 using `scp` or `rsync`.
+#### Step 1 — Create Job 3
 
-The application was not deployed by cloning the `main` branch directly onto the EC2 instance. Instead, Jenkins transferred the tested code from its workspace to the deployment server.
+1. From the Jenkins dashboard, select **New Item**.
+2. Enter a name for the deployment job, for example:
+   `hasanah-ttt-job3-cd-deploy`
+3. Select **Freestyle project**.
+4. Select **OK**.
 
-After transferring the files, Jenkins connected to the EC2 instance through SSH and executed the commands required to install dependencies and start or restart the application.
+#### Step 2 — Configure the Repository
+
+Under **Source Code Management**, select **Git** and enter the GitHub repository URL.
+
+Configure Jenkins to use the appropriate repository credentials.
+
+Job 3 uses the tested application code that has successfully progressed through the previous stages of the pipeline.
+
+#### Step 3 — Configure the Trigger
+
+Configure Job 3 so that it only executes after Job 2 completes successfully.
+
+This ensures that deployment only takes place after:
+
+1. Job 1 has successfully tested the application.
+2. Job 2 has successfully merged/published the tested code.
+3. Job 3 is then allowed to deploy it.
+
+#### Step 4 — Configure SSH Authentication
+
+Jenkins requires SSH access to the AWS EC2 instance.
+
+The EC2 private key was stored securely using **Jenkins Credentials** rather than being placed inside the GitHub repository.
+
+The credentials were then made available to the deployment job so that Jenkins could authenticate with the EC2 instance.
+
+The EC2 security group also needed to allow SSH traffic on:
+
+`TCP port 22`
+
+from the Jenkins server.
+
+#### Step 5 — Configure the EC2 Instance
+
+The EC2 instance was prepared with the software required to run the application, including:
+
+- Node.js
+- npm
+- the required application dependencies/process management tools
+
+The EC2 instance also required the appropriate security group rules so that the deployed application could be accessed.
+
+#### Step 6 — Transfer the Application
+
+Under **Build Steps**, an **Execute shell** step was added.
+
+The deployment script transferred the application from the Jenkins workspace to the EC2 instance using `scp` or `rsync`.
+
+This is important because the EC2 instance does not simply clone the `main` branch from GitHub. Jenkins is responsible for transferring the application that has progressed through the CI/CD pipeline.
+
+#### Step 7 — Execute Shell Commands
+
+The following shell commands were used by Job 3:
+
+```bash
+# INSERT THE ACTUAL JOB 3 EXECUTE SHELL COMMANDS USED HERE
+```
+
+The deployment script performs two main operations:
+
+1. Transfers the application files from the Jenkins workspace to the EC2 instance.
+2. Connects to the EC2 instance through SSH and runs the commands required to install dependencies and start/restart the application.
+
+A typical structure for this deployment is:
+
+```bash
+scp -r <application-files> ubuntu@<EC2-IP>:<destination>
+
+ssh ubuntu@<EC2-IP> << 'EOF'
+cd <application-directory>
+npm install
+# application start/restart command
+EOF
+```
+
+The exact commands used in the Jenkins Execute Shell configuration should be included above so that the deployment can be reproduced.
+
+#### Step 8 — Save and Test Job 3
+
+After configuring the deployment commands:
+
+1. Save the Jenkins job.
+2. Run the pipeline by pushing a change to the `dev` branch.
+3. Allow Job 1 to test the application.
+4. Confirm Job 2 successfully merges/publishes the tested change.
+5. Confirm Job 3 starts automatically.
+6. Check the Job 3 console output for successful file transfer and SSH execution.
+7. Open the EC2-hosted application in a browser.
+8. Confirm that the latest application change is visible.
+
+#### Expected Result
+
+After Job 2 completes successfully, Job 3 transfers the application to EC2 and starts/restarts it.
+
+The updated front page should then be visible through the EC2-hosted application.
 ## 7. GitHub Webhook
 
 A GitHub webhook was used to automatically notify Jenkins when changes were pushed to the GitHub repository.
@@ -297,12 +449,54 @@ GitHub was configured to send a webhook event to Jenkins when changes were pushe
 
 When a developer pushed a change to the `dev` branch:
 
-1. GitHub detected the push.
-2. The webhook notified Jenkins.
-3. Jenkins automatically triggered Job 1.
-4. If Job 1 passed, Job 2 was triggered.
-5. If Job 2 completed successfully, Job 3 deployed the application to EC2.
+### Webhook Setup
 
+The GitHub webhook was configured to automatically trigger Jenkins when a change was pushed to the repository.
+
+#### Step 1 — Open the GitHub Repository Settings
+
+1. Open the application repository on GitHub.
+2. Select **Settings**.
+3. Select **Webhooks** from the repository settings.
+4. Select **Add webhook**.
+
+#### Step 2 — Configure the Payload URL
+
+In the **Payload URL** field, enter the Jenkins webhook endpoint.
+
+The Jenkins server must be reachable by GitHub for webhook events to be delivered successfully.
+
+#### Step 3 — Configure the Content Type
+
+Set the webhook **Content type** to:
+
+`application/json`
+
+#### Step 4 — Select the Trigger Event
+
+Configure the webhook to trigger for **push events**.
+
+This means GitHub sends a webhook notification whenever new commits are pushed to the repository.
+
+#### Step 5 — Enable the Jenkins GitHub Trigger
+
+Within Job 1 in Jenkins, open **Configure**.
+
+Under **Build Triggers**, enable:
+
+`GitHub hook trigger for GITScm polling`
+
+Save the Jenkins configuration.
+
+#### Step 6 — Test the Webhook
+
+A change can then be made to the application on the `dev` branch:
+
+```bash
+git checkout dev
+git add .
+git commit -m "Test CI/CD pipeline"
+git push origin dev
 This meant the developer did not need to manually start the Jenkins pipeline after every change.
 
 ### Purpose
